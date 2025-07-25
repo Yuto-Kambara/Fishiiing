@@ -48,6 +48,19 @@ public class CoolerBox : MonoBehaviour
         return true;
     }
 
+    /// <summary>クーラーボックス内の魚をすべて売却し、得た金額を返す</summary>
+    public int SellAllFish()
+    {
+        if (stored.Count == 0) return 0;
+
+        int total = 0;
+        foreach (var fd in stored)
+            total += fd.basePrice + Mathf.RoundToInt(fd.lengthCm * 2f) + fd.rarity * 50;
+
+        stored.Clear();                     // 中身を空に
+        return total;
+    }
+
     /* 公開 API */
     public int FishCount => stored.Count;
     public IReadOnlyList<FishProjectile.FishData> GetInventory() => stored;

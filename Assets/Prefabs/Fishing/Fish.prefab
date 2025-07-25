@@ -175,3 +175,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6329415e0ae545d4597fee4faac943a4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  data:
+    species: 
+    lengthCm: 0
+    rarity: 0
+    basePrice: 100
+  NuisancableTime: 10
+  groundLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295

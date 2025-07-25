@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using System.Collections;
 
 /// <summary>
 /// 放物線で飛ぶ魚。着地後 (Landed = true) にプレイヤーが拾うと
@@ -17,11 +18,16 @@ public class FishProjectile : MonoBehaviour
         public string species;
         public float lengthCm;
         public int rarity;
+        public int basePrice;  // 種類ごとの基礎価格 (例: 100)
     }
     public FishData data;
 
     /*====== 状態 ======*/
     public bool Landed { get; private set; } = false;
+
+    public bool IsHeld { get; private set; } = false;
+
+    public float NuisancableTime = 10f; // 30 秒後に邪魔者をスポーン
 
     [Header("Landing")]
     public LayerMask groundLayers = ~0;     // 着地判定用
@@ -53,6 +59,15 @@ public class FishProjectile : MonoBehaviour
         rb.angularVelocity = 0f;
         rb.gravityScale = 0f;
         rb.constraints = RigidbodyConstraints2D.FreezeAll;
+
+        StartCoroutine(NotifyThiefAfterDelay());
+    }
+
+    private IEnumerator NotifyThiefAfterDelay()
+    {
+        yield return new WaitForSeconds(NuisancableTime);
+        if (this != null && Landed)      // まだ残っていれば
+            NuisanceManager.Instance.RegisterFish(this);
     }
 
     /*--------------------------------------------------------
@@ -73,5 +88,6 @@ public class FishProjectile : MonoBehaviour
         var col = GetComponent<Collider2D>();
         col.isTrigger = true;
         col.enabled = true;        // 念のため
+        IsHeld = true;          // ★プレイヤーが保持中
     }
 }
