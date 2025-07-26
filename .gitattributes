@@ -1,3 +1,23 @@
-* text=auto eol=lf
-*.bat  text eol=crlf
-*.cs text eol=lf
+# --- 共通テキストファイル ---
+*.txt      text eol=lf
+*.json     text eol=lf
+*.yaml     text eol=lf
+*.yml      text eol=lf
+.gitattributes text eol=lf
+.vsconfig  text eol=lf
+
+# --- Unity 専用 YAML ---
+*.meta     text eol=lf merge=unityyamlmerge diff
+*.unity    text eol=lf merge=unityyamlmerge diff
+*.prefab   text eol=lf merge=unityyamlmerge diff
+*.asset    text eol=lf merge=unityyamlmerge diff
+*.scenetemplate text eol=lf
+
+# --- スクリプト ---
+*.cs       text eol=lf diff=csharp
+
+# --- バイナリは改行変換しない ---
+*.png  binary
+*.jpg  binary
+*.fbx  binary
+

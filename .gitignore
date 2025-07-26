@@ -97,3 +97,29 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+### Fonts (binary sources) ###
+# TrueType / OpenType / Web / Bitmap / TTC etc.
+*.ttf
+*.otf
+*.ttc
+*.otc
+*.woff
+*.woff2
+*.eot
+*.fon
+*.fnt
+# まれに使うSVGフォント
+*.svg
+
+# 対応する Unity .meta も無視
+*.ttf.meta
+*.otf.meta
+*.ttc.meta
+*.otc.meta
+*.woff.meta
+*.woff2.meta
+*.eot.meta
+*.fon.meta
+*.fnt.meta
+*.svg.meta
