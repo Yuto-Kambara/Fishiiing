@@ -3,9 +3,9 @@ using UnityEngine;
 
 /// <summary>
 /// クーラーボックス
-/// ・BoxCollider2D（Is Trigger = true）必須
-/// ・魚オブジェクトが Trigger に触れた瞬間に自動収納
-///   （Player が持っている場合も、魚自身の Trigger が発火します）
+/// ・BoxCollider2D（IsTrigger = true）必須
+/// ・魚（FishProjectile）が触れた瞬間に自動収納
+/// ・中身は FishInstance（ScriptableObjectベースの定義 + 個体値）で保持
 /// </summary>
 [RequireComponent(typeof(Collider2D))]
 public class CoolerBox : MonoBehaviour
@@ -13,24 +13,23 @@ public class CoolerBox : MonoBehaviour
     [Header("Capacity  (0 = Unlimited)")]
     public int capacity = 0;
 
-    /* 内部：保持している魚データだけ保存 */
-    private readonly List<FishProjectile.FishData> stored = new();
+    // ★ 旧: List<FishProjectile.FishData> → 新: List<FishInstance>
+    private readonly List<FishInstance> stored = new List<FishInstance>();
 
-    private void Reset() => GetComponent<Collider2D>().isTrigger = true;
+    private void Reset()
+    {
+        var col = GetComponent<Collider2D>();
+        if (col) col.isTrigger = true;
+    }
 
-    /*------------------------------------------------------------
-     * 魚オブジェクトが触れた瞬間に収納処理
-     *-----------------------------------------------------------*/
+    // 魚が触れたら収納（プレイヤーが持っている魚も魚自身のTriggerで入ります）
     private void OnTriggerEnter2D(Collider2D other)
     {
         var fish = other.GetComponent<FishProjectile>();
         if (fish) TryStoreFish(fish);
     }
 
-    /*------------------------------------------------------------*/
-    /// <summary>
-    /// 魚を収納するメイン処理
-    /// </summary>
+    /// <summary>魚を収納（プレイヤーから渡す場合にも呼べる）</summary>
     public bool TryStoreFish(FishProjectile fish)
     {
         if (!fish) return false;
@@ -41,27 +40,32 @@ public class CoolerBox : MonoBehaviour
             return false;
         }
 
-        /* ------ データ保存 & オブジェクト破棄 ------ */
-        stored.Add(fish.data);          // 情報だけ保持
-        Destroy(fish.gameObject);       // 物体は破棄
-        Debug.Log($"▶ Stored {fish.data.species}  (Total: {stored.Count})");
+        // ★ FishInstance を格納（旧: fish.data を FishData として扱っていた）
+        stored.Add(fish.data);
+
+        // 物体は破棄（情報だけ残す）
+        Destroy(fish.gameObject);
+
+        // ★ ログも新構造に合わせて speciesName 参照
+        Debug.Log($"▶ Stored {fish.data.def.speciesName}  (Total: {stored.Count})");
         return true;
     }
 
-    /// <summary>クーラーボックス内の魚をすべて売却し、得た金額を返す</summary>
+    /// <summary>中の魚をすべて売却して金額を返す</summary>
     public int SellAllFish()
     {
         if (stored.Count == 0) return 0;
 
         int total = 0;
-        foreach (var fd in stored)
-            total += fd.basePrice + Mathf.RoundToInt(fd.lengthCm * 2f) + fd.rarity * 50;
+        // ★ FishInstance は value に確定済みの売値を持っています
+        foreach (var fi in stored)
+            total += fi.value;
 
-        stored.Clear();                     // 中身を空に
+        stored.Clear();
         return total;
     }
 
     /* 公開 API */
     public int FishCount => stored.Count;
-    public IReadOnlyList<FishProjectile.FishData> GetInventory() => stored;
+    public IReadOnlyList<FishInstance> GetInventory() => stored.AsReadOnly();
 }

@@ -1,57 +1,34 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// FishingController (Rod‑based 2025‑07)
-///  ──────────────────────────────────────────
-///  ✔ 出る位置 … Cast Offset (local)
-///  ✔ 戻る速さ … Reel Speeds (水平 / 全方向)
-///  ✔ 戻る位置 … Catch Offset (local) + Catch Tolerance
+/// FishingController（軽量：入力と状態遷移のみ）
+/// ・生成／レア抽選／複数同時は FishSpawner に委譲
+/// ・速度や同時数は RodStats から取得
 /// </summary>
 public class FishingController : MonoBehaviour
 {
-    /*===== References =====*/
     [Header("References")]
     public PlayerController player;
     public Transform breakwater;
+    public FishSpawner spawner;
+    public RodStats rod;
 
-    /*===== Prefabs & Cast =====*/
-    [Header("Prefabs & Cast")]
+    [Header("Hook / Cast")]
     public GameObject hookPrefab;
-    public GameObject fishPrefab;
     public float castSpeed = 6f;
+    public Vector2 castOffset = new(0f, -0.5f);
 
-    [Header("Cast Offset (local)")]           // ★釣り竿ローカル
-    public Vector2 castOffset = new(0f, -0.5f);   // 🆕Inspector で調整
+    [Header("Catch Point (local)")]
+    public Vector2 catchOffset = Vector2.zero;
+    public float catchTolerance = 0.08f;
 
-    /*===== Reel Speeds =====*/
-    [Header("Reel Speeds")]
-    public float reelSpeedHorizontal = 4f;    // 🆕水平リール(アンカー状態)
-    public float reelSpeedFull = 4f;          // 🆕XY 巻取り
-
-    /*===== Catch Point =====*/
-    [Header("Catch Offset (local)")]
-    public Vector2 catchOffset = Vector2.zero;  // 🆕戻ってくる最終位置(ロッドローカル)
-
-    [Tooltip("Catch Offset 付近に到達したとみなす許容距離")]
-    public float catchTolerance = 0.08f;        // 🆕
-
-    /*===== 判定距離 (変わらず) =====*/
-    [Header("判定距離 (m)")]
+    [Header("Judge Distances")]
     public float releaseDistance = 0.06f;
-    public float maxDropDistance = 3f;
 
-    /*===== 飛翔アーク設定 (変わらず) =====*/
-    [Header("Arc Settings")]
-    public float peakHeight = 1.5f;
-    public float groundYOffset = 0.2f;
-    public float fishSpawnYOff = 0.2f;
-
-    /*===== Fail 沈没 =====*/
-    [Header("Sinking")]
+    [Header("Fail Sinking")]
     public float sinkSpeed = 3f;
     public float sinkDestroyDelay = 2f;
 
-    /*===== 内部 =====*/
     enum State { Idle, Casting, Fishing }
     State state = State.Idle;
 
@@ -59,24 +36,26 @@ public class FishingController : MonoBehaviour
     Hook hookComp;
     Rigidbody2D hookRb;
 
-    float rightEdgeX, leftEdgeX;
+    float rightEdgeX;
     float lastEdgeDist;
     bool fullReel = false, isSinking = false;
     float sinkTimer;
 
-    /*================ Awake =================*/
+    // 巻取り中の動的速度（レアリティによって変動）
+    float currentFullReelSpeed;
+
     void Awake()
     {
         if (!player) player = FindFirstObjectByType<PlayerController>();
-        if (!breakwater) { Debug.LogError("Breakwater 未設定"); enabled = false; return; }
+        if (!rod) rod = FindFirstObjectByType<RodStats>();
+        if (!spawner) spawner = FindFirstObjectByType<FishSpawner>();
+        if (!breakwater) { Debug.LogError("[FishingController] Breakwater 未設定"); enabled = false; return; }
 
         var col = breakwater.GetComponent<BoxCollider2D>();
         float half = col.size.x * breakwater.lossyScale.x * 0.5f;
         rightEdgeX = breakwater.position.x + half;
-        leftEdgeX = breakwater.position.x - half;
     }
 
-    /*================ Update =================*/
     void Update()
     {
         switch (state)
@@ -91,17 +70,15 @@ public class FishingController : MonoBehaviour
         }
     }
 
-    /*================ CAST =================*/
     void StartCast()
     {
         if (player && !player.IsAtRightEdge(0.15f)) return;
 
-        player?.SetMovementEnabled(false);    // 移動ロック
-
+        player?.SetMovementEnabled(false);
         state = State.Casting;
         fullReel = false; isSinking = false;
 
-        Vector3 origin = transform.TransformPoint(castOffset);          // 🆕
+        Vector3 origin = transform.TransformPoint(castOffset);
         currentHook = Instantiate(hookPrefab, origin, Quaternion.identity);
         hookRb = currentHook.GetComponent<Rigidbody2D>();
         hookComp = currentHook.GetComponent<Hook>();
@@ -112,7 +89,6 @@ public class FishingController : MonoBehaviour
 
     public void OnHookHitWater() => state = State.Fishing;
 
-    /*================ FISHING =================*/
     void HandleFishing()
     {
         if (!currentHook) return;
@@ -121,7 +97,6 @@ public class FishingController : MonoBehaviour
         Vector2 rodTipPos = transform.position;
         float edgeDist = Mathf.Max(0f, hookPos.x - rightEdgeX);
 
-        /*---- 水平リール中 ----*/
         if (!fullReel)
         {
             bool held = Input.GetKey(KeyCode.Space);
@@ -130,9 +105,10 @@ public class FishingController : MonoBehaviour
             if (held)
             {
                 float dx = rodTipPos.x - hookPos.x;
+                float hSpeed = rod ? rod.GetHorizontalReelSpeed() : 4f;
                 hookRb.linearVelocity = Mathf.Abs(dx) < 0.05f
                     ? Vector2.zero
-                    : new Vector2(Mathf.Sign(dx) * reelSpeedHorizontal, 0f);   // 🆕
+                    : new Vector2(Mathf.Sign(dx) * hSpeed, 0f);
 
                 if (edgeDist < releaseDistance) { TriggerFailSink(); return; }
             }
@@ -143,25 +119,30 @@ public class FishingController : MonoBehaviour
                 if (edgeDist >= releaseDistance)
                 {
                     lastEdgeDist = edgeDist;
-                    SpawnAndThrowFish(hookPos);
+
+                    // ★ 生成は Spawner に任せる（複数対応）
+                    // 生成直後の箇所（HandleFishing 内の up 判定成功時）
+                    var res = spawner
+                        ? spawner.SpawnFromHook(hookPos, lastEdgeDist, releaseDistance)
+                        : new FishSpawnResult(); // ★ default ではなく new で非 null に
+                    currentFullReelSpeed = rod ? rod.GetFullReelSpeed(res.maxRarity) : 4f;
+
                     hookComp.ReleaseAnchor();
                     fullReel = true;
                 }
                 else TriggerFailSink();
             }
         }
-        /*---- XY 巻取り中 ----*/
         else
         {
-            Vector2 catchWorld = rodTipPos + (Vector2)catchOffset;              // 🆕
-            Vector2 dir = catchWorld - hookPos;
+            Vector2 catchWorld = (Vector2)transform.position + catchOffset;
+            Vector2 dir = catchWorld - (Vector2)hookPos;
 
-            if (dir.magnitude < catchTolerance) FinishReel();                   // 🆕
-            else hookRb.linearVelocity = dir.normalized * reelSpeedFull;        // 🆕
+            if (dir.magnitude < catchTolerance) FinishReel();
+            else hookRb.linearVelocity = dir.normalized * Mathf.Max(0.1f, currentFullReelSpeed);
         }
     }
 
-    /*================ SUCCESS / FAIL =================*/
     void FinishReel()
     {
         if (currentHook)
@@ -192,35 +173,6 @@ public class FishingController : MonoBehaviour
             Destroy(currentHook);
             player?.SetMovementEnabled(true);
             state = State.Idle;
-        }
-    }
-
-    /*================ 魚投射 =================*/
-    void SpawnAndThrowFish(Vector3 spawnPos)
-    {
-        if (!fishPrefab) return;
-
-        float t = Mathf.InverseLerp(releaseDistance, maxDropDistance,
-                                    Mathf.Clamp(lastEdgeDist, releaseDistance, maxDropDistance));
-        float targetX = Mathf.Lerp(player.transform.position.x, leftEdgeX, t);
-        float targetY = breakwater.position.y + groundYOffset;
-
-        float g = Mathf.Abs(Physics2D.gravity.y);
-        float peakY = Mathf.Max(spawnPos.y, targetY) + peakHeight;
-        float vyUp = Mathf.Sqrt(2f * g * (peakY - spawnPos.y));
-        float tUp = vyUp / g;
-        float vyDown = Mathf.Sqrt(2f * g * (peakY - targetY));
-        float tDown = vyDown / g;
-        float totalT = tUp + tDown;
-        float vx = (targetX - spawnPos.x) / totalT;
-
-        Vector3 spawn = spawnPos + Vector3.up * fishSpawnYOff;
-        var fish = Instantiate(fishPrefab, spawn, Quaternion.identity);
-        if (fish.TryGetComponent(out Rigidbody2D rb))
-        {
-            rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-            rb.linearVelocity = new Vector2(vx, vyUp);
-            rb.gravityScale = 1f;
         }
     }
 }

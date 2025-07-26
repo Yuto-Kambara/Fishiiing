@@ -20,7 +20,7 @@ public class FishProjectile : MonoBehaviour
         public int rarity;
         public int basePrice;  // 種類ごとの基礎価格 (例: 100)
     }
-    public FishData data;
+    public FishInstance data;
 
     /*====== 状態 ======*/
     public bool Landed { get; private set; } = false;
@@ -48,6 +48,14 @@ public class FishProjectile : MonoBehaviour
                 break;
             }
         }
+    }
+    public void Init(FishDefinition def)
+    {
+        float len = Random.Range(def.minLength, def.maxLength);
+        data = new FishInstance(def, len);
+
+        if (def.sprite)                // 見た目差し替え
+            GetComponent<SpriteRenderer>().sprite = def.sprite;
     }
 
     private void Land()
