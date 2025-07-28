@@ -31,5 +31,15 @@ public class InventoryModel
         OnSlotChanged?.Invoke(b);
     }
 
+    /// <summary>全スロットを空にして UI に通知</summary>
+    public void Clear()
+    {
+        for (int i = 0; i<Capacity; i++)
+        {
+            _slots[i] = null;
+            OnSlotChanged?.Invoke(i);
+        }
+    }
+
     public bool InRange(int i) => i >= 0 && i < Capacity;
 }

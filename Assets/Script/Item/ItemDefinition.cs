@@ -12,6 +12,6 @@ public class ItemDefinition : ScriptableObject
     public bool stackable = true;
     [Min(1)] public int maxStack = 99;
 
-    [Header("Optional Fish Link (魚アイテム化に使う)")]
-    public FishDefinition fishDef; // Fish 専用定義を持たせたい場合（任意）
+    [Header("Fish (for itemizing a caught fish)")]
+    public bool isFishItem = false;  // 魚アイテム用の共通定義か？
 }

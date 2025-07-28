@@ -3,9 +3,9 @@
 /// <summary>
 /// PlayerController
 ///  ・←→ / A‑D で堤防上を移動 (左右端は Padding 制限)
-///  ・魚 (Landed) に触れるとピックアップ
-///  ・クーラーボックス収納は「魚 Trigger が触れた瞬間」に任せる
+///  ・魚 (Landed) に触れるとピックアップ（収納は魚自身の Trigger に任せる）
 ///  ・FishingController から移動ロック / アンロック可能
+///  ・InventoryUIManager から UI 開閉に応じた移動モードを指示（横のみ許可/通常）
 /// </summary>
 [RequireComponent(typeof(Collider2D), typeof(Rigidbody2D))]
 public class PlayerController : MonoBehaviour
@@ -20,23 +20,43 @@ public class PlayerController : MonoBehaviour
     [Header("Carry")]
     public Transform carryAnchor;
 
+    /* ===== UI Movement Gate ===== */
+    public enum MovementUIMode { Closed, HorizontalOnly, Disabled } // Disabled は完全停止
+    private MovementUIMode uiMovementMode = MovementUIMode.Closed;
+
     /* ===== Internal ===== */
     private float leftEdgeX, rightEdgeX;
     private FishProjectile heldFish;
-    private bool movementEnabled = true;
+    private bool movementEnabled = true; // 釣りなどのゲーム側ロック
 
     /*--------------------------------------------------------*/
     private void Awake()
     {
-        /* Rigidbody を Kinematic にして Trigger イベントを受ける */
+        // Rigidbody を Kinematic にして Trigger イベントを受ける
         var rb = GetComponent<Rigidbody2D>();
         rb.bodyType = RigidbodyType2D.Kinematic;
 
-        var col = breakwater.GetComponent<BoxCollider2D>();
-        float half = col.size.x * breakwater.lossyScale.x * 0.5f;
-        leftEdgeX = breakwater.position.x - half + leftPadding;
-        rightEdgeX = breakwater.position.x + half - rightPadding;
+        // 堤防端を算出
+        if (!breakwater)
+        {
+            Debug.LogError("[PlayerController] Breakwater 未設定です。");
+        }
+        else
+        {
+            var col = breakwater.GetComponent<BoxCollider2D>();
+            if (!col)
+            {
+                Debug.LogError("[PlayerController] Breakwater に BoxCollider2D が必要です。");
+            }
+            else
+            {
+                float half = col.size.x * breakwater.lossyScale.x * 0.5f;
+                leftEdgeX = breakwater.position.x - half + leftPadding;
+                rightEdgeX = breakwater.position.x + half - rightPadding;
+            }
+        }
 
+        // 所持位置
         if (!carryAnchor)
         {
             carryAnchor = new GameObject("CarryAnchor").transform;
@@ -48,10 +68,21 @@ public class PlayerController : MonoBehaviour
     /*--------------------------------------------------------*/
     private void Update()
     {
-        if (movementEnabled) HandleMovement();
+        // 実効モードを取得（釣り等の完全ロックが最優先）
+        var mode = GetEffectiveUIMode();
 
-        /* 魚がクーラーボックスで Destroy されたら参照をクリア */
-        if (heldFish == null) heldFish = null;
+        if (mode != MovementUIMode.Disabled)
+        {
+            // このコントローラは元々「横移動のみ」なので、
+            // Closed/HorizontalOnly いずれでも HandleMovement は同じ（横だけ適用）
+            HandleMovement();
+        }
+
+        // 魚がクーラーボックスで Destroy されたら参照は自然に null になる
+        if (heldFish == null)
+        {
+            heldFish = null;
+        }
     }
 
     private void HandleMovement()
@@ -80,7 +111,20 @@ public class PlayerController : MonoBehaviour
     }
 
     /* ===== API ===== */
+    /// <summary>釣りなどゲーム側の完全ロック / アンロック</summary>
     public void SetMovementEnabled(bool enable) => movementEnabled = enable;
+
+    /// <summary>UI 開閉側からの移動モード指示（横のみ許可 / 通常）</summary>
+    public void SetUIMovementMode(MovementUIMode mode) => uiMovementMode = mode;
+
+    /// <summary>右端にいるか？（釣り開始の判定用）</summary>
     public bool IsAtRightEdge(float thr = 0.1f)
         => Mathf.Abs(transform.position.x - rightEdgeX) <= thr;
+
+    /// <summary>釣り等のロックを優先した実効モード</summary>
+    private MovementUIMode GetEffectiveUIMode()
+    {
+        if (!movementEnabled) return MovementUIMode.Disabled; // 釣り中などは完全停止
+        return uiMovementMode;                                 // それ以外はUIの指示に従う
+    }
 }

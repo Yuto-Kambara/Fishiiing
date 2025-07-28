@@ -61,7 +61,7 @@ public class FishSpawner : MonoBehaviour
 
         for (int i = 0; i < count; i++)
         {
-            // 1) エサに応じてレアリティを重み抽選
+            // 1) エサ/ルアー・竿設定に応じてレアリティを重み抽選
             var rarity = PickRarity();
             if ((int)rarity > (int)result.maxRarity) result.maxRarity = rarity;
 
@@ -112,10 +112,15 @@ public class FishSpawner : MonoBehaviour
 
     FishRarity PickRarity()
     {
-        var weights = rod ? rod.GetRarityWeights()
-                          : new Vector5().ToDict(); // すべて0なら Common にフォールバック
+        // ★ 修正：Vector5 は廃止。rod が無い/重みが全ゼロの時は Common=1 のフォールバックを使う
+        var weights = (rod != null) ? rod.GetRarityWeights() : FallbackWeights();
+
         int sum = 0; foreach (var kv in weights) sum += Mathf.Max(0, kv.Value);
-        if (sum <= 0) return FishRarity.Common;
+        if (sum <= 0)
+        {
+            // すべて 0 なら Common を返す
+            return FishRarity.Common;
+        }
 
         int r = Random.Range(0, sum);
         foreach (var kv in weights)
@@ -125,6 +130,19 @@ public class FishSpawner : MonoBehaviour
             r -= w;
         }
         return FishRarity.Common;
+    }
+
+    // Common=1 のみを持つ安全なフォールバック重み
+    Dictionary<FishRarity, int> FallbackWeights()
+    {
+        return new Dictionary<FishRarity, int>
+        {
+            { FishRarity.Common, 1 },
+            { FishRarity.Uncommon, 0 },
+            { FishRarity.Rare, 0 },
+            { FishRarity.Epic, 0 },
+            { FishRarity.Legendary, 0 },
+        };
     }
 
     public float RightEdgeX => rightEdgeX;

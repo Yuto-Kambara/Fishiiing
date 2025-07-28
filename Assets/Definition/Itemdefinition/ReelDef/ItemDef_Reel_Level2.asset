@@ -9,12 +9,19 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7dd66e2ad6dc4c346896a7b04c5475b6, type: 3}
-  m_Name: ItemDef_Reel
+  m_Script: {fileID: 11500000, guid: 9b1aa3976df476f4b93abff119debedd, type: 3}
+  m_Name: ItemDef_Reel_Level2
   m_EditorClassIdentifier: 
   displayName: Item
   icon: {fileID: 0}
   tags: 8
-  stackable: 1
-  maxStack: 1
-  fishDef: {fileID: 0}
+  stackable: 0
+  maxStack: 99
+  isFishItem: 0
+  horizontalSpeedMul: 5
+  fullReelSpeedMul: 4
+  mulCommon: 1
+  mulUncommon: 1
+  mulRare: 1
+  mulEpic: 2
+  mulLegendary: 3

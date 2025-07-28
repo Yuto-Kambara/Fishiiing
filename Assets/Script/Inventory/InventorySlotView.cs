@@ -1,41 +1,67 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 public class InventorySlotView : MonoBehaviour, IDropHandler
 {
     [Header("Binding")]
-    public InventoryBinder binder;  // Š‘®ƒCƒ“ƒxƒ“ƒgƒŠ
+    public InventoryBinder binder;
     public int slotIndex;
 
     [Header("Accept Rule")]
-    public ItemTags allowed = ItemTags.All; // ƒXƒƒbƒg‚²‚Æ‚Ìó‚¯“ü‚êğŒ
+    public ItemTags allowed = ItemTags.All;
 
     [Header("Visual")]
     public Image highlight;
 
     public InventoryModel Model => binder ? binder.Model : null;
 
+    public void Initialize(InventoryBinder owner, int index, ItemTags allowedMask, bool ignoreLayout = false)
+    {
+        binder = owner;
+        slotIndex = index;
+        allowed = allowedMask;
+
+        if (ignoreLayout)
+        {
+            var le = GetComponent<LayoutElement>() ?? gameObject.AddComponent<LayoutElement>();
+            le.ignoreLayout = true;
+        }
+
+        if (binder) binder.RegisterSlot(this);
+    }
+
     private void OnEnable()
     {
+        if (!binder) binder = GetComponentInParent<InventoryBinder>();
         if (binder) binder.RegisterSlot(this);
     }
 
     public void OnDrop(PointerEventData eventData)
     {
+        if (!binder) return;
+
+        // 1) æ—¢å­˜ï¼šã‚¤ãƒ³ãƒ™ãƒ³ãƒˆãƒªé–“ã®ç§»å‹•
         var itemView = eventData.pointerDrag ? eventData.pointerDrag.GetComponent<InventoryItemView>() : null;
-        if (itemView == null) return;
-
-        // ˆÚ“®s
-        bool ok = InventoryService.TryMove(
-            itemView.ParentSlot.Model, itemView.ParentSlot.slotIndex, itemView.Item?.Tags ?? ItemTags.None,
-            this.Model, this.slotIndex, this.allowed
-        );
-
-        // ¬Œ÷‚ÍUI‚ªƒCƒxƒ“ƒgw“Ç‚ÅXV‚³‚ê‚Ü‚·iInventoryBinder ‚ª”½‰fj
-        if (!ok)
+        if (itemView)
         {
-            // ¸”s ¨ Œ³‚ÌˆÊ’u‚Ö–ß‚·‚Ì‚Í InventoryItemView ‘¤‚É”C‚¹‚é
+            InventoryService.TryMove(
+                itemView.ParentSlot.Model, itemView.ParentSlot.slotIndex, itemView.Item?.Tags ?? ItemTags.None,
+                this.Model, this.slotIndex, this.allowed
+            );
+            return;
+        }
+
+        // 2) æ–°è¦ï¼šã‚·ãƒ§ãƒƒãƒ—ã‹ã‚‰ã®è³¼å…¥ãƒ‰ãƒ­ãƒƒãƒ—
+        var shopDrag = eventData.pointerDrag ? eventData.pointerDrag.GetComponent<ShopDraggableItem>() : null;
+        if (shopDrag && shopDrag.offer != null)
+        {
+            bool ok = ShopPurchaseService.TryPurchaseToSlot(binder, slotIndex, allowed, shopDrag.offer);
+            if (!ok)
+            {
+                // å¤±æ•—ï¼šã‚¹ãƒ­ãƒƒãƒˆã«å…¥ã‚‰ãšã‚·ãƒ§ãƒƒãƒ—å´ã«æ®‹ã‚‹ï¼ˆè¦–è¦šçš„ã«ã¯å…ƒã®è¡Œã¯å‹•ã‹ãªã„ï¼‰
+                Debug.Log("Purchase failed: not enough money or slot mismatch/overflow.");
+            }
         }
     }
 }

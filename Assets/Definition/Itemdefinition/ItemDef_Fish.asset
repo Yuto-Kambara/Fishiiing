@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: ItemDef_Fish
   m_EditorClassIdentifier: 
   displayName: Item
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 7a5190805c497054c909b738508a12d9, type: 3}
   tags: 1
-  stackable: 1
+  stackable: 0
   maxStack: 99
-  fishDef: {fileID: 0}
+  isFishItem: 0
