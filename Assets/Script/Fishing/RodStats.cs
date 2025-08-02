@@ -50,10 +50,10 @@ public class RodStats : MonoBehaviour
         = new Dictionary<FishRarity, float>()
         {
             { FishRarity.Common, 1f },
-            { FishRarity.Uncommon, 1f },
-            { FishRarity.Rare, 1f },
-            { FishRarity.Epic, 1f },
-            { FishRarity.Legendary, 1f },
+            { FishRarity.Uncommon, 0.5f },
+            { FishRarity.Rare, 0f },
+            { FishRarity.Epic, 0f },
+            { FishRarity.Legendary, 0f },
         };
 
     /* ====== API：UI/ショップ/コントローラが使用 ====== */

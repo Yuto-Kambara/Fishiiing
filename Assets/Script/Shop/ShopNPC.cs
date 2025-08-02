@@ -13,7 +13,7 @@ using UnityEngine.Events;
 public class ShopNPC : MonoBehaviour
 {
     [Header("References")]
-    public SimpleShopUI shopUI;                 // ショップUI（パネルのルート）
+    public GridShopUI shopUI;                 // ショップUI（パネルのルート）
     public PlayerController player;             // プレイヤー（移動ゲート用）
     public Transform breakwater;                // 堤防（BoxCollider2D 必須）
 
@@ -50,7 +50,7 @@ public class ShopNPC : MonoBehaviour
     private void Awake()
     {
         if (!player) player = FindFirstObjectByType<PlayerController>();
-        if (!shopUI) shopUI = FindFirstObjectByType<SimpleShopUI>();
+        if (!shopUI) shopUI = FindFirstObjectByType<GridShopUI>();
         if (!breakwater)
         {
             var bw = GameObject.FindFirstObjectByType<BoxCollider2D>();

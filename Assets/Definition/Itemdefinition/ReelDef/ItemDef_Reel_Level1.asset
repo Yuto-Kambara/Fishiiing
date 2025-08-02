@@ -13,11 +13,14 @@ MonoBehaviour:
   m_Name: ItemDef_Reel_Level1
   m_EditorClassIdentifier: 
   displayName: Item
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: d2eb5adf4a5159d42a3e4f3710c703f8, type: 3}
   tags: 8
   stackable: 0
   maxStack: 99
+  rank: 1
   isFishItem: 0
+  canSell: 1
+  sellPrice: 100
   horizontalSpeedMul: 1
   fullReelSpeedMul: 2
   mulCommon: 1

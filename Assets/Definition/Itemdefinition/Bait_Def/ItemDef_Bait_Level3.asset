@@ -13,10 +13,11 @@ MonoBehaviour:
   m_Name: ItemDef_Bait_Level3
   m_EditorClassIdentifier: 
   displayName: Item
-  icon: {fileID: 0}
-  tags: 20
+  icon: {fileID: 21300000, guid: 407ed98ceea35bb47ab4ae55d764e82d, type: 3}
+  tags: 4
   stackable: 1
   maxStack: 99
+  rank: 3
   isFishItem: 0
   rarityWeights:
     common: 0

@@ -1,106 +1,174 @@
+ï»¿using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-/// <summary>
-/// ‹›‚Ì¶¬^•ú•¨ü‰‘¬•t—^^ƒGƒT‚É‰‚¶‚½ƒŒƒAƒŠƒeƒB’Š‘I^•¡”“¯¶¬
-/// </summary>
 public class FishSpawner : MonoBehaviour
 {
     [Header("References")]
     public PlayerController player;
     public Transform breakwater;
-    public RodStats rod;                         // ŠÆƒpƒ‰ƒ[ƒ^QÆ
+    public RodStats rod;
+    public Transform coolerMouth;
 
     [Header("Prefabs / Definitions")]
     public GameObject defaultFishPrefab;
-    public FishDefinition[] fishTable;           // í’è‹`iƒŒƒA‚İj
+    public FishDefinition[] fishTable;
 
     [Header("Arc Settings")]
-    public float peakHeight = 1.5f;
-    public float groundYOffset = 0.2f;
-    public float fishSpawnYOff = 0.2f;
+    public float peakHeightNear = 1.2f;
+    public float peakHeightFar = 2.5f;
+    public float leftDropHeight = 0.2f;
 
     [Header("Drop Mapping")]
+    [Tooltip("ã‚¯ãƒ¼ãƒ©ãƒ¼å¯„ã‚Šã¨ã¿ãªã™é–‹å§‹è·é›¢ï¼ˆå³ç«¯ã‹ã‚‰ï¼‰")]
+    public float releaseDistance = 0.06f;
+    [Tooltip("t=1ï¼ˆæœ€é ï¼‰ã¨ã¿ãªã™è·é›¢ä¸Šé™ï¼ˆè‡ªå‹•è£œæ­£ã§ä¸Šæ›¸ãå¯ï¼‰")]
     public float maxDropDistance = 3f;
+    [Tooltip("å·¦ç«¯ã®ã‚ãšã‹ãªå†…å¯„ã›")]
+    public float leftDropPadding = 0.3f;
 
     [Header("Multi Spawn")]
-    [Tooltip("•¡”“¯‚ÌÛA—‰ºX‚É—^‚¦‚éƒ‰ƒ“ƒ_ƒ€•")]
+    [Tooltip("ã‚¯ãƒ¼ãƒ©ãƒ¼å¯„ã‚Šã»ã©è‡ªå‹•ã§ç¸®ã‚€Xã°ã‚‰ã¤ãé‡ã®ä¸Šé™")]
     public float multiSpawnSpreadX = 0.25f;
+    [Tooltip("2åŒ¹ç›®ä»¥é™ã®å‡ºç¾æ®µå·®ï¼ˆ>0ã§ä¸‹æ–¹å‘ï¼‰")]
+    public float multiSpawnStaggerDownY = 0.12f;
+    [Tooltip("ç”Ÿæˆç›´å¾Œã€åŒä¸€ã‚­ãƒ£ã‚¹ãƒˆå†…ã®é­šåŒå£«ã®è¡çªã‚’ç„¡åŠ¹åŒ–ã™ã‚‹ç§’æ•°")]
+    public float launchNoCollideTime = 0.4f;
 
-    /* === “à•” === */
+    /* === å†…éƒ¨ === */
     float leftEdgeX, rightEdgeX;
+
+    // åŒä¸€ã‚­ãƒ£ã‚¹ãƒˆå†…ã§æœ€è¿‘ç”Ÿæˆã—ãŸé­šã®ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ç¾¤ï¼ˆçŸ­æ™‚é–“ã§è¡çªç„¡åŠ¹ã«ã™ã‚‹ï¼‰
+    readonly List<Collider2D> _launchGroup = new List<Collider2D>();
+    float _lastSpawnTime = -999f;
+    const float GROUP_RESET_GAP = 1.0f;   // ã“ã®æ™‚é–“ç©ºãã¨æ–°ã‚­ãƒ£ã‚¹ãƒˆæ‰±ã„ã§ã‚°ãƒ«ãƒ¼ãƒ—ã‚’åˆæœŸåŒ–
 
     void Awake()
     {
         if (!player) player = FindFirstObjectByType<PlayerController>();
         if (!rod) rod = FindFirstObjectByType<RodStats>();
-        if (!breakwater) { Debug.LogError("[FishSpawner] Breakwater –¢İ’è"); enabled = false; return; }
-        if (!defaultFishPrefab)
-            Debug.LogWarning("[FishSpawner] defaultFishPrefab ‚ª–¢Š„‚è“–‚Ä‚Å‚·B");
+        if (!breakwater || !coolerMouth)
+        { Debug.LogError("[FishSpawner] Breakwater ã¾ãŸã¯ CoolerMouth æœªè¨­å®š"); enabled = false; return; }
 
         var col = breakwater.GetComponent<BoxCollider2D>();
-        if (!col) { Debug.LogError("[FishSpawner] Breakwater ‚É BoxCollider2D ‚ª•K—v"); enabled = false; return; }
+        if (!col)
+        { Debug.LogError("[FishSpawner] Breakwater ã« BoxCollider2D ãŒå¿…è¦"); enabled = false; return; }
+
         float half = col.size.x * breakwater.lossyScale.x * 0.5f;
         rightEdgeX = breakwater.position.x + half;
         leftEdgeX = breakwater.position.x - half;
     }
 
-    public FishSpawnResult SpawnFromHook(Vector3 hookPos, float edgeDist, float releaseDistance)
+    /// <summary>
+    /// 1å›ã®å‘¼ã³å‡ºã—ã§ã€Œå¿…ãš1åŒ¹ã ã‘ã€ç”Ÿæˆã—ã¾ã™ã€‚
+    /// edgeDist: å³ç«¯ã‹ã‚‰ã®è·é›¢ï¼ˆFishingController å´ã§è¨ˆç®—ã—ãŸå€¤ï¼‰
+    /// </summary>
+    public FishSpawnResult SpawnFromHook(Vector3 hookPos, float edgeDist)
     {
-        var result = new FishSpawnResult(); // š class ‚È‚Ì‚Åí‚ÉƒCƒ“ƒXƒ^ƒ“ƒX‰»
+        var res = new FishSpawnResult();
+        if (!defaultFishPrefab) return res;
 
-        int count = rod ? rod.GetMultiCatchCount() : 1;
-        if (!defaultFishPrefab || count <= 0) return result;
+        // --- ã‚­ãƒ£ã‚¹ãƒˆåˆ‡ã‚Šæ›¿ãˆæ¤œå‡ºï¼ˆé–“ãŒç©ºã„ãŸã‚‰ã‚°ãƒ«ãƒ¼ãƒ—åˆæœŸåŒ–ï¼‰ ---
+        if (Time.time - _lastSpawnTime > GROUP_RESET_GAP) _launchGroup.Clear();
+        _lastSpawnTime = Time.time;
 
-        // –Ú•WX‚ÌŠî“_‚ğŒvZ
-        float clamped = Mathf.Clamp(edgeDist, releaseDistance, maxDropDistance);
-        float t = Mathf.InverseLerp(releaseDistance, maxDropDistance, clamped);
-        float baseTargetX = Mathf.Lerp(player.transform.position.x, leftEdgeX, t);
-        float targetY = breakwater.position.y + groundYOffset;
+        // 0..1 æ­£è¦åŒ–ï¼šè¿‘ã„â†’0 / é ã„â†’1
+        float t = Mathf.InverseLerp(releaseDistance, maxDropDistance,
+                    Mathf.Clamp(edgeDist, releaseDistance, maxDropDistance));
 
-        for (int i = 0; i < count; i++)
+        // è½ä¸‹2ç‚¹
+        float earlyX = leftEdgeX + Mathf.Max(0f, leftDropPadding);
+        float earlyY = breakwater.position.y + leftDropHeight;
+        Vector2 targetEarly = new Vector2(earlyX, earlyY);
+        Vector2 targetCooler = new Vector2(coolerMouth.position.x, coolerMouth.position.y);
+
+        // è¿‘ã„â†’ã‚¯ãƒ¼ãƒ©ãƒ¼ / é ã„â†’å·¦ç«¯ï¼ˆè£œé–“ã®å‘ãã«æ³¨æ„ï¼‰
+        Vector2 targetBase = Vector2.Lerp(targetCooler, targetEarly, t);
+
+        // æ”¾ç‰©ç·šãƒ”ãƒ¼ã‚¯ï¼šé ã„ã»ã©é«˜ã„
+        float peak = Mathf.Lerp(peakHeightNear, peakHeightFar, t);
+
+        // ã‚¯ãƒ¼ãƒ©ãƒ¼å¯„ã‚Šã»ã©ã°ã‚‰ã¤ãç¸®å°
+        float spread = multiSpawnSpreadX * t;
+
+        // ãƒ¬ã‚¢ãƒªãƒ†ã‚£æŠ½é¸ï¼ˆRod ã®é‡ã¿ã‚’åˆ©ç”¨ï¼‰
+        var rarity = PickRarity();
+        res.maxRarity = rarity;
+
+        var defs = fishTable?.Where(d => d && d.rarity == rarity).ToList();
+        FishDefinition def = (defs != null && defs.Count > 0)
+            ? defs[Random.Range(0, defs.Count)]
+            : PickAnyDefinition();
+
+        // ç›®æ¨™ã‚’å°‘ã—æ•£ã‚‰ã™
+        Vector2 target = targetBase;
+        if (spread > 0f) target.x += Random.Range(-spread, spread);
+
+        // === å‡ºç¾ä½ç½®ï¼š2åŒ¹ç›®ä»¥é™ã¯æ®µå·® ===
+        int idxInGroup = Mathf.Max(0, _launchGroup.Count); // 0=æœ€åˆ
+        float yStagger = -multiSpawnStaggerDownY * idxInGroup;
+        Vector3 spawn = hookPos + new Vector3(0f, 0.2f + yStagger, 0f);
+
+        // åˆé€Ÿè¨ˆç®—ã¯ã€Œspawnã€åŸºæº–
+        Vector2 v0 = ComputeBallisticVelocity(spawn, target, peak);
+
+        // ç”Ÿæˆ
+        GameObject fishGO = FishFactory.SpawnFish(def, spawn, Quaternion.identity, defaultFishPrefab);
+        if (fishGO && fishGO.TryGetComponent(out Rigidbody2D rb))
         {
-            // 1) ƒGƒT/ƒ‹ƒA[EŠÆİ’è‚É‰‚¶‚ÄƒŒƒAƒŠƒeƒB‚ğd‚İ’Š‘I
-            var rarity = PickRarity();
-            if ((int)rarity > (int)result.maxRarity) result.maxRarity = rarity;
-
-            // 2) “¯ƒŒƒA“à‚©‚ç FishDefinition ‚ğ‘I‘ğ
-            var defs = fishTable?.Where(d => d && d.rarity == rarity).ToList();
-            FishDefinition def = (defs != null && defs.Count > 0)
-                ? defs[Random.Range(0, defs.Count)]
-                : PickAnyDefinition(); // ƒŒƒA“à•sİ‚È‚ç‘S‘Ì‚©‚ç
-
-            // 3) —‰º–Ú•WX ‚ğ­‚µU‚ç‚·
-            float targetX = baseTargetX + Random.Range(-multiSpawnSpreadX, multiSpawnSpreadX);
-
-            // 4) •ú•¨ü‰‘¬ŒvZ
-            Vector2 v0 = ComputeBallisticVelocity(hookPos, new Vector2(targetX, targetY), peakHeight);
-
-            // 5) ¶¬•‰‘¬•t—^
-            Vector3 spawn = hookPos + Vector3.up * fishSpawnYOff;
-            GameObject fishGO = FishFactory.SpawnFish(def, spawn, Quaternion.identity, defaultFishPrefab);
-            if (fishGO && fishGO.TryGetComponent(out Rigidbody2D rb))
-            {
-                rb.linearVelocity = v0;
-                rb.gravityScale = 1f;
-            }
-            if (fishGO) result.spawned.Add(fishGO);
+            rb.linearVelocity = v0;
+            rb.gravityScale = 1f;
+            rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous; // è¡çªå®‰å®šåŒ–
         }
 
-        return result;
+        // --- é­šåŒå£«ã®ä¸€æ™‚çš„ãªè¡çªç„¡åŠ¹åŒ– ---
+        if (fishGO && fishGO.TryGetComponent(out Collider2D myCol))
+        {
+            // æ—¢å­˜ã‚°ãƒ«ãƒ¼ãƒ—ã¨ç›¸äº’è¡çªã‚’ç„¡åŠ¹åŒ–
+            for (int i = 0; i < _launchGroup.Count; i++)
+            {
+                var other = _launchGroup[i];
+                if (other && myCol) Physics2D.IgnoreCollision(myCol, other, true);
+            }
+            _launchGroup.Add(myCol);
+            StartCoroutine(ReenableCollisionsAfterDelay(myCol, launchNoCollideTime));
+        }
+
+        if (fishGO) res.spawned.Add(fishGO);
+        return res;
     }
 
+    IEnumerator ReenableCollisionsAfterDelay(Collider2D mine, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+
+        // ç”Ÿå­˜ã—ã¦ã„ã‚‹ç›¸æ‰‹ã¨ã®è¡çªã‚’å†æœ‰åŠ¹åŒ–
+        for (int i = _launchGroup.Count - 1; i >= 0; i--)
+        {
+            var other = _launchGroup[i];
+            if (!other) { _launchGroup.RemoveAt(i); continue; }
+            if (mine) Physics2D.IgnoreCollision(mine, other, false);
+        }
+        // è‡ªåˆ†ã‚’ã‚°ãƒ«ãƒ¼ãƒ—ã‹ã‚‰å¤–ã™
+        _launchGroup.Remove(mine);
+    }
+
+    /* === æ”¾ç‰©ç·šåˆé€Ÿè¨ˆç®—ï¼ˆé ‚ç‚¹æŒ‡å®šï¼‰ === */
     Vector2 ComputeBallisticVelocity(Vector2 start, Vector2 target, float peak)
     {
         float g = Mathf.Abs(Physics2D.gravity.y);
-        float peakY = Mathf.Max(start.y, target.y) + peak;
-        float vyUp = Mathf.Sqrt(2f * g * (peakY - start.y));
+
+        float baseY = Mathf.Max(start.y, target.y);
+        float peakY = baseY + Mathf.Max(0.1f, peak);
+
+        float vyUp = Mathf.Sqrt(2f * g * Mathf.Max(0.01f, peakY - start.y));
         float tUp = vyUp / g;
-        float vyDn = Mathf.Sqrt(2f * g * (peakY - target.y));
+        float vyDn = Mathf.Sqrt(2f * g * Mathf.Max(0.01f, peakY - target.y));
         float tDn = vyDn / g;
+
         float T = tUp + tDn;
-        float vx = (target.x - start.x) / T;
+        float vx = (target.x - start.x) / Mathf.Max(0.01f, T);
         return new Vector2(vx, vyUp);
     }
 
@@ -112,15 +180,9 @@ public class FishSpawner : MonoBehaviour
 
     FishRarity PickRarity()
     {
-        // š C³FVector5 ‚Í”p~Brod ‚ª–³‚¢/d‚İ‚ª‘Sƒ[ƒ‚Ì‚Í Common=1 ‚ÌƒtƒH[ƒ‹ƒoƒbƒN‚ğg‚¤
         var weights = (rod != null) ? rod.GetRarityWeights() : FallbackWeights();
-
         int sum = 0; foreach (var kv in weights) sum += Mathf.Max(0, kv.Value);
-        if (sum <= 0)
-        {
-            // ‚·‚×‚Ä 0 ‚È‚ç Common ‚ğ•Ô‚·
-            return FishRarity.Common;
-        }
+        if (sum <= 0) return FishRarity.Common;
 
         int r = Random.Range(0, sum);
         foreach (var kv in weights)
@@ -132,7 +194,6 @@ public class FishSpawner : MonoBehaviour
         return FishRarity.Common;
     }
 
-    // Common=1 ‚Ì‚İ‚ğ‚ÂˆÀ‘S‚ÈƒtƒH[ƒ‹ƒoƒbƒNd‚İ
     Dictionary<FishRarity, int> FallbackWeights()
     {
         return new Dictionary<FishRarity, int>
@@ -144,11 +205,8 @@ public class FishSpawner : MonoBehaviour
             { FishRarity.Legendary, 0 },
         };
     }
-
-    public float RightEdgeX => rightEdgeX;
 }
 
-/// <summary>ƒXƒ|[ƒ“Œ‹‰ÊF¶¬‚µ‚½‹›‚ÆA‚»‚Ì’†‚ÅÅ‚à‚‚¢ƒŒƒAƒŠƒeƒB</summary>
 public class FishSpawnResult
 {
     public List<GameObject> spawned = new List<GameObject>();

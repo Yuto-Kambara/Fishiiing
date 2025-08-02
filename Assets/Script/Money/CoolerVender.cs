@@ -1,8 +1,9 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using System.Reflection;
+using UnityEngine;
 
 /// <summary>
-/// クーラーボックス売却ステーション（高精度版 + UIクリア）
-/// ・FindFirstObjectByType/FindObjectsByType を使用（旧APIやLINQ不使用）
+/// クーラーボックス売却ステーション（魚以外も売却可）
 /// </summary>
 [RequireComponent(typeof(Collider2D))]
 public class CoolerVendor : MonoBehaviour
@@ -34,7 +35,6 @@ public class CoolerVendor : MonoBehaviour
         // 参照の自動補完（Inspector未設定のときのみ）
         if (!coolerBinder)
         {
-            // まず1件だけ取得
             var candidate = FindFirstObjectByType<InventoryBinder>();
             if (candidate && NameLooksCooler(candidate.name)) coolerBinder = candidate;
             else
@@ -44,7 +44,7 @@ public class CoolerVendor : MonoBehaviour
                 {
                     if (b && NameLooksCooler(b.name)) { coolerBinder = b; break; }
                 }
-                if (!coolerBinder) coolerBinder = candidate; // それでも無ければ最初の候補
+                if (!coolerBinder) coolerBinder = candidate;
             }
         }
 
@@ -81,53 +81,102 @@ public class CoolerVendor : MonoBehaviour
     {
         int earned = 0;
 
-        if (coolerBinder)               // ★ UI 優先：UI の魚だけを売却
-            earned = SellFishFromBinder(coolerBinder);
-        else if (legacyCooler)          // フォールバック（旧ロジック）
+        if (coolerBinder)               // ★ UI 優先：UI の中身を売却
+            earned = SellFromBinder(coolerBinder);
+        else if (legacyCooler)          // フォールバック（旧ロジック：魚のみのまま）
             earned = legacyCooler.SellAllFish();
 
-        if (earned <= 0) return;        // 魚が無ければ何もしない
+        if (earned <= 0) return;
 
         CurrencyManager.Instance.AddMoney(earned);
-        Debug.Log($"Sold fish for ¥{earned}. Wallet: ¥{CurrencyManager.Instance.Money}");
+        Debug.Log($"Sold items for ¥{earned}. Wallet: ¥{CurrencyManager.Instance.Money}");
     }
 
     /// <summary>
-    /// Binder 内の「魚タグ」を持つ ItemInstance だけを集計して売却。
-    /// 売却後は魚アイテムだけをスロットから除去。
+    /// Binder 内の売却可能アイテムを集計して売却。
+    /// 魚：FishInstance.value、その他：ItemDefinition.sellPrice を使用。
     /// </summary>
-    private int SellFishFromBinder(InventoryBinder binder)
+    private int SellFromBinder(InventoryBinder binder)
     {
         var model = binder.Model;
         if (model == null) return 0;
 
         int total = 0;
-        bool anyFish = false;
+        var toClear = new List<int>();
 
-        // 1) 集計
         for (int i = 0; i < model.Capacity; i++)
         {
             var it = model.Get(i);
             if (it == null) continue;
-            if ((it.Tags & ItemTags.Fish) == 0) continue;
 
             int count = Mathf.Max(1, it.count);
-            int pricePerOne = it.fish.value; // FishInstance.value（個体値から確定済み）
-            total += pricePerOne * count;
-            anyFish = true;
+            int unit = 0;
+
+            // 魚は個体値ベース（FishInstance は struct なので null チェック不要）
+            if ((it.Tags & ItemTags.Fish) != 0)
+            {
+                unit = Mathf.Max(0, it.fish.value);
+            }
+            else
+            {
+                // 魚以外は定義の売値
+                var def = TryGetDefinition(it);
+                if (def != null && def.IsSellable)
+                {
+                    unit = Mathf.Max(0, def.sellPrice);
+                }
+            }
+
+            if (unit > 0)
+            {
+                total += unit * count;
+                toClear.Add(i);
+            }
         }
 
-        if (!anyFish) return 0; // ★ 魚が無ければ売却しない
+        if (total <= 0) return 0;
 
-        // 2) 魚だけ削除（ルアー等は残す）
-        for (int i = 0; i < model.Capacity; i++)
+        // 売却したスロットを空にする
+        for (int j = 0; j < toClear.Count; j++)
         {
-            var it = model.Get(i);
-            if (it == null) continue;
-            if ((it.Tags & ItemTags.Fish) == 0) continue;
-            model.Set(i, null);
+            model.Set(toClear[j], null);
         }
 
         return total;
+    }
+
+    /// <summary>
+    /// ItemInstance から ItemDefinition を取得（簡易リフレクション）
+    /// プロジェクトで確定名がある場合は直参照に置換してください（例: return it.definition;）。
+    /// </summary>
+    private ItemDefinition TryGetDefinition(object it)
+    {
+        if (it == null) return null;
+
+        var t = it.GetType();
+
+        // 1) プロパティ
+        foreach (var pname in new[] { "Definition", "ItemDef", "ItemDefinition", "Def", "Item" })
+        {
+            var p = t.GetProperty(pname, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (p != null && typeof(ScriptableObject).IsAssignableFrom(p.PropertyType))
+            {
+                var val = p.GetValue(it) as ItemDefinition;
+                if (val != null) return val;
+            }
+        }
+
+        // 2) フィールド
+        foreach (var fname in new[] { "definition", "itemDef", "itemDefinition", "def", "item" })
+        {
+            var f = t.GetField(fname, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (f != null && typeof(ScriptableObject).IsAssignableFrom(f.FieldType))
+            {
+                var val = f.GetValue(it) as ItemDefinition;
+                if (val != null) return val;
+            }
+        }
+
+        return null;
     }
 }

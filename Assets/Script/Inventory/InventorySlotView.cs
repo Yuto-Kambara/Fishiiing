@@ -53,10 +53,10 @@ public class InventorySlotView : MonoBehaviour, IDropHandler
         }
 
         // 2) 新規：ショップからの購入ドロップ
-        var shopDrag = eventData.pointerDrag ? eventData.pointerDrag.GetComponent<ShopDraggableItem>() : null;
-        if (shopDrag && shopDrag.offer != null)
+        var shopDrag = eventData.pointerDrag ? eventData.pointerDrag.GetComponent<ShopGridItemView>() : null;
+        if (shopDrag && shopDrag.Offer != null)
         {
-            bool ok = ShopPurchaseService.TryPurchaseToSlot(binder, slotIndex, allowed, shopDrag.offer);
+            bool ok = ShopPurchaseService.TryPurchaseToSlot(binder, slotIndex, allowed, shopDrag.Offer);
             if (!ok)
             {
                 // 失敗：スロットに入らずショップ側に残る（視覚的には元の行は動かない）

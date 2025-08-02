@@ -10,9 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5c7421f078835d348bb725a36b3e8767, type: 3}
-  m_Name: Offer_Bait10
+  m_Name: Offer_Bait_Level2
   m_EditorClassIdentifier: 
-  item: {fileID: 11400000, guid: 28ec85f98b17bf44d9d8a9264cea1cd0, type: 2}
+  item: {fileID: 11400000, guid: 44b8c59d742559b42a70fe39c9d8a76c, type: 2}
   count: 10
   price: 100
   displayNameOverride: 

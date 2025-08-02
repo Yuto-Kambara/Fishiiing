@@ -18,5 +18,5 @@ MonoBehaviour:
   pricePerCm: 2
   minLength: 20
   maxLength: 60
-  sprite: {fileID: 899460140749134916, guid: 76f73040812ca084798e92216871630f, type: 3}
+  sprite: {fileID: 8782300280853913174, guid: a5c374b3c2881df46a3462ae3624c9a8, type: 3}
   prefabOverride: {fileID: 0}
